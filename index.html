@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <meta name="theme-color" content="#3B2316" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Brunch Crush — Coffee &amp; Breakfast Match-3</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <!-- Top Café Header -->
+    <header class="top-bar">
+      <button id="btn-levels" class="icon-pill level-pill" type="button" aria-label="Open level map">
+        <span class="pill-label">LEVEL</span>
+        <span id="hud-level" class="pill-value">1</span>
+        <span id="hud-cap" class="pill-sub">/ 100</span>
+      </button>
+
+      <div class="brand-center">
+        <h1 class="brand-title">Brunch Crush</h1>
+        <span id="hud-batch" class="batch-badge hidden">Mix #1</span>
+      </div>
+
+      <div class="top-actions">
+        <button id="btn-sound" class="icon-btn" type="button" aria-label="Toggle sound" title="Sound On/Off">
+          <svg id="icon-sound-on" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path>
+          </svg>
+          <svg id="icon-sound-off" class="hidden" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <line x1="23" y1="9" x2="17" y2="15"></line>
+            <line x1="17" y1="9" x2="23" y2="15"></line>
+          </svg>
+        </button>
+        <button id="btn-help" class="icon-btn" type="button" aria-label="How to play" title="Menu &amp; Guide">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- HUD Panel: Moves, Goals, Score & Progress -->
+    <section class="hud-card" aria-label="Game status">
+      <div class="hud-moves-box">
+        <span class="hud-label">MOVES</span>
+        <span id="hud-moves" class="hud-moves-num">20</span>
+      </div>
+
+      <div class="hud-goals-box">
+        <span id="hud-goal-title" class="hud-label">GOAL</span>
+        <div id="hud-goals" class="goals-list"></div>
+      </div>
+
+      <div class="hud-score-box">
+        <div class="score-row">
+          <span class="hud-label">SCORE</span>
+          <span id="hud-score" class="hud-score-num">0</span>
+        </div>
+        <div class="progress-track" aria-label="Score progress">
+          <div id="hud-progress-fill" class="progress-fill" style="width: 0%"></div>
+          <div class="star-markers">
+            <span id="star-m-1" class="star-dot" style="left: 35%">★</span>
+            <span id="star-m-2" class="star-dot" style="left: 70%">★</span>
+            <span id="star-m-3" class="star-dot" style="left: 96%">★</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Game Board Stage -->
+    <main class="board-stage">
+      <div id="board-frame" class="board-frame">
+        <div id="board-cells" class="board-layer board-cells" aria-hidden="true"></div>
+        <div id="board-tiles" class="board-layer board-tiles" role="grid" aria-label="Brunch Crush game board"></div>
+        <div id="board-fx" class="board-layer board-fx" aria-hidden="true"></div>
+        <div id="combo-banner" class="combo-banner hidden" aria-live="polite"></div>
+      </div>
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer class="bottom-bar">
+      <button id="btn-hint" class="action-btn" type="button">
+        <span class="action-icon">💡</span>
+        <span>Hint</span>
+      </button>
+      <button id="btn-restart" class="action-btn" type="button">
+        <span class="action-icon">↺</span>
+        <span>Restart</span>
+      </button>
+    </footer>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <!-- Level Complete Modal -->
+  <div id="modal-win" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="win-title">
+    <div class="modal-card celebration-card">
+      <div id="win-stars" class="modal-stars">★★★</div>
+      <h2 id="win-title" class="modal-title">Level 1 Complete!</h2>
+      <p id="win-subtitle" class="modal-sub">Delicious match!</p>
+      <div class="modal-stat-grid">
+        <div class="stat-box">
+          <span class="stat-lbl">SCORE</span>
+          <span id="win-score" class="stat-val">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-lbl">BEST</span>
+          <span id="win-best" class="stat-val">0</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-win-replay" class="btn-secondary" type="button">Replay</button>
+        <button id="btn-win-next" class="btn-primary" type="button">Next Level →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Out of Moves Modal -->
+  <div id="modal-lose" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="lose-title">
+    <div class="modal-card">
+      <div class="modal-emoji">🍳</div>
+      <h2 id="lose-title" class="modal-title">Out of Moves!</h2>
+      <p id="lose-subtitle" class="modal-sub">So close — give it another sizzling try!</p>
+      <div class="modal-stat-grid">
+        <div class="stat-box">
+          <span class="stat-lbl">SCORE</span>
+          <span id="lose-score" class="stat-val">0</span>
+        </div>
+        <div class="stat-box">
+          <span class="stat-lbl">LEVEL</span>
+          <span id="lose-level" class="stat-val">1</span>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button id="btn-lose-levels" class="btn-secondary" type="button">Levels</button>
+        <button id="btn-lose-retry" class="btn-primary" type="button">Try Again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Every-100-Levels Coffee Check Modal -->
+  <div id="modal-coffee" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="coffee-title">
+    <div class="modal-card coffee-modal-card">
+      <div class="coffee-steam-badge" id="coffee-milestone-badge">LEVEL 100 COMPLETE!</div>
+      <div class="coffee-cup-hero" aria-hidden="true">
+        <svg viewBox="0 0 120 120" width="84" height="84">
+          <defs>
+            <linearGradient id="cupGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#FFF8F0" />
+              <stop offset="100%" stop-color="#EAD2BC" />
+            </linearGradient>
+            <linearGradient id="brewGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#7B4224" />
+              <stop offset="100%" stop-color="#3E1E0F" />
+            </linearGradient>
+          </defs>
+          <path class="steam-line s1" d="M40 34 C36 24, 46 18, 42 8" fill="none" stroke="#FFE3C2" stroke-width="4" stroke-linecap="round" />
+          <path class="steam-line s2" d="M58 30 C54 20, 64 14, 60 4" fill="none" stroke="#FFE3C2" stroke-width="4" stroke-linecap="round" />
+          <path class="steam-line s3" d="M76 34 C72 24, 82 18, 78 8" fill="none" stroke="#FFE3C2" stroke-width="4" stroke-linecap="round" />
+          <path d="M88 52 C104 52, 106 78, 86 80" fill="none" stroke="#EAD2BC" stroke-width="8" stroke-linecap="round" />
+          <path d="M24 44 H88 L82 90 C80 100, 72 106, 56 106 C40 106, 32 100, 30 90 Z" fill="url(#cupGrad)" stroke="#6B3D24" stroke-width="3" />
+          <ellipse cx="56" cy="44" rx="32" ry="8" fill="url(#brewGrad)" stroke="#6B3D24" stroke-width="2.5" />
+          <ellipse cx="48" cy="43" rx="10" ry="2.5" fill="#B5754A" opacity="0.65" />
+          <ellipse cx="56" cy="108" rx="38" ry="6" fill="#C9A282" opacity="0.6" />
+        </svg>
+      </div>
+      <h2 id="coffee-title" class="modal-title coffee-question">Did you have your coffee today?</h2>
+      <p id="coffee-desc" class="modal-sub">
+        Answer <strong>Yes</strong> to continue to Level 200. Answer <strong>No</strong> to return to Level 1 with freshly reshuffled levels!
+      </p>
+      <div class="coffee-choice-row">
+        <button id="btn-coffee-no" class="btn-danger" type="button">
+          No, not yet
+          <span class="btn-sub">Reset to Lv. 1 &amp; reshuffle</span>
+        </button>
+        <button id="btn-coffee-yes" class="btn-coffee-yes" type="button">
+          Yes, I did! ☕
+          <span id="btn-coffee-yes-sub" class="btn-sub">Continue to Lv. 200</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Level Select Modal -->
+  <div id="modal-levels" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="levels-title">
+    <div class="modal-card modal-tall">
+      <div class="modal-header-row">
+        <div>
+          <h2 id="levels-title" class="modal-title left">Level Map</h2>
+          <p id="levels-meta" class="modal-sub left">Showing Levels 1–100 · Mix #1</p>
+        </div>
+        <button id="btn-close-levels" class="close-x" type="button" aria-label="Close level map">✕</button>
+      </div>
+
+      <div id="tier-tabs" class="tier-tabs"></div>
+      <div id="levels-grid" class="levels-grid"></div>
+    </div>
+  </div>
+
+  <!-- Menu / How-To-Play Modal -->
+  <div id="modal-menu" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="menu-title">
+    <div class="modal-card modal-tall">
+      <div class="modal-header-row">
+        <h2 id="menu-title" class="modal-title left">How to Play</h2>
+        <button id="btn-close-menu" class="close-x" type="button" aria-label="Close menu">✕</button>
+      </div>
+
+      <div class="guide-scroll">
+        <div class="guide-section">
+          <h3>Breakfast Pieces</h3>
+          <div id="guide-pieces" class="guide-pieces-row"></div>
+          <p class="guide-text">Swipe or tap adjacent pieces to match 3 or more before running out of moves.</p>
+        </div>
+
+        <div class="guide-section">
+          <h3>Special Boosters</h3>
+          <ul class="guide-list">
+            <li><strong>Match 4 in a line:</strong> Creates a <em>Striped Piece</em> that blasts a full row or column.</li>
+            <li><strong>Match L or T shape:</strong> Creates a <em>Sizzle Bomb</em> that blasts a 3×3 area twice.</li>
+            <li><strong>Match 5 in a line:</strong> Creates a <em>Super Espresso Bomb</em> — swap with any piece to clear all of that type!</li>
+            <li><strong>Combine any 2 specials</strong> for massive chain combos!</li>
+          </ul>
+        </div>
+
+        <div class="guide-section">
+          <h3>Every 100 Levels ☕</h3>
+          <p class="guide-text">
+            When you beat Level 100 (and 200, 300…), you’ll be asked:
+            <em>“Did you have your coffee today?”</em>
+            Say <strong>Yes</strong> to unlock the next 100 levels, or <strong>No</strong> to return to Level 1 with freshly reshuffled levels!
+          </p>
+        </div>
+
+        <div class="guide-section">
+          <h3>Saved Progress</h3>
+          <button id="btn-menu-reset-all" class="btn-ghost-danger full-w" type="button">Reset All Saved Progress</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="icons.js"></script>
+  <script src="audio.js"></script>
+  <script src="levels.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
