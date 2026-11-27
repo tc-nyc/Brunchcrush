@@ -32,7 +32,6 @@
   // DOM References
   const dom = {
     hudLevel: document.getElementById('hud-level'),
-    hudCap: document.getElementById('hud-cap'),
     hudBatch: document.getElementById('hud-batch'),
     hudMoves: document.getElementById('hud-moves'),
     hudGoalTitle: document.getElementById('hud-goal-title'),
@@ -49,6 +48,7 @@
     boardCells: document.getElementById('board-cells'),
     boardTiles: document.getElementById('board-tiles'),
     boardFx: document.getElementById('board-fx'),
+    screenFx: document.getElementById('screen-fx'),
     comboBanner: document.getElementById('combo-banner'),
     toast: document.getElementById('toast'),
 
@@ -278,7 +278,7 @@
     }
   }
 
-  function createTileElement(tile, r, c, spawnAboveRows = 0) {
+  function createTileElement(tile, r, c, spawnAboveRows = 0, delayMs = 0) {
     const el = document.createElement('div');
     el.className = tileClassName(tile);
     el.dataset.id = String(tile.id);
@@ -288,13 +288,23 @@
 
     const startY = (r - spawnAboveRows) * cellPx;
     el.style.transform = `translate3d(${c * cellPx}px, ${startY}px, 0)`;
+    if (spawnAboveRows > 0) {
+      el.style.opacity = '0';
+    }
     dom.boardTiles.appendChild(el);
     tileElements.set(tile.id, el);
 
     if (spawnAboveRows > 0) {
+      const durationMs = Math.round(370 + spawnAboveRows * 78);
       el.classList.add('dropping');
+      el.style.transitionDuration = `${durationMs}ms, 220ms`;
+      el.style.transitionDelay = `${delayMs}ms, ${delayMs}ms`;
+      // Double rAF guarantees the browser paints the off-top start position before dropping
       requestAnimationFrame(() => {
-        el.style.transform = `translate3d(${c * cellPx}px, ${r * cellPx}px, 0)`;
+        requestAnimationFrame(() => {
+          el.style.opacity = '1';
+          el.style.transform = `translate3d(${c * cellPx}px, ${r * cellPx}px, 0)`;
+        });
       });
     }
     return el;
@@ -329,7 +339,6 @@
 
   function updateHUD() {
     dom.hudLevel.textContent = String(config.level);
-    dom.hudCap.textContent = `/ ${save.milestoneCap}`;
 
     if (save.shuffleEpoch > 0) {
       dom.hudBatch.textContent = `Reshuffle #${save.shuffleEpoch + 1}`;
@@ -500,10 +509,18 @@
   });
 
   // ---- MATCH-3 CORE LOGIC ----
-  function moveTileDOM(tile, r, c, dropping = false) {
+  function moveTileDOM(tile, r, c, dropping = false, dropRows = 1, delayMs = 0) {
     const el = tileElements.get(tile.id);
     if (!el) return;
     el.classList.toggle('dropping', dropping);
+    if (dropping) {
+      const durationMs = Math.round(360 + Math.max(1, dropRows) * 78);
+      el.style.transitionDuration = `${durationMs}ms, 220ms`;
+      el.style.transitionDelay = `${delayMs}ms, 0ms`;
+    } else {
+      el.style.transitionDuration = '';
+      el.style.transitionDelay = '';
+    }
     el.style.transform = `translate3d(${c * cellPx}px, ${r * cellPx}px, 0)`;
   }
 
@@ -525,7 +542,7 @@
     moveTileDOM(tileA, b.r, b.c, false);
     moveTileDOM(tileB, a.r, a.c, false);
     AUDIO.swap();
-    await sleep(195);
+    await sleep(245);
 
     // Check special + special OR color-bomb swap first
     const isSpecialCombo =
@@ -551,7 +568,7 @@
       board[b.r][b.c] = tileB;
       moveTileDOM(tileA, a.r, a.c, false);
       moveTileDOM(tileB, b.r, b.c, false);
-      await sleep(200);
+      await sleep(250);
       state = 'IDLE';
       scheduleHintTimer();
       return;
@@ -738,13 +755,13 @@
       toClear.add(key(posB.r, posB.c));
 
       if (isAStriped && isBStriped) {
-        showComboBanner('CROSS BLAST!');
+        showComboBanner('CROSS BLAST!', 'big-combo');
         addRowToSet(posA.r, toClear);
         addColToSet(posA.c, toClear);
-        spawnBeamFx('h', posA.r);
-        spawnBeamFx('v', posA.c);
+        spawnBeamFx('h', posA.r, tileA.type);
+        spawnBeamFx('v', posA.c, tileB.type);
       } else if (isAWrapped && isBWrapped) {
-        showComboBanner('DOUBLE SIZZLE!');
+        showComboBanner('DOUBLE SIZZLE!', 'big-combo');
         for (let dr = -2; dr <= 2; dr++) {
           for (let dc = -2; dc <= 2; dc++) {
             const nr = posA.r + dr;
@@ -754,15 +771,15 @@
         }
         spawnBurstFx(posA.r, posA.c, cellPx * 5);
       } else {
-        showComboBanner('TRIPLE CROSS!');
+        showComboBanner('TRIPLE CROSS!', 'big-combo');
         for (let d = -1; d <= 1; d++) {
           if (inBounds(posA.r + d, 0)) {
             addRowToSet(posA.r + d, toClear);
-            spawnBeamFx('h', posA.r + d);
+            spawnBeamFx('h', posA.r + d, tileA.type);
           }
           if (inBounds(0, posA.c + d)) {
             addColToSet(posA.c + d, toClear);
-            spawnBeamFx('v', posA.c + d);
+            spawnBeamFx('v', posA.c + d, tileB.type);
           }
         }
       }
@@ -834,16 +851,25 @@
       }
 
       const matchedBacon = groups.some((g) => g.type === 'bacon');
+      const primaryGroup = groups[0];
+
+      // Flash themed full-screen line animation whenever a player completes a 4+ straight line!
+      for (const group of groups) {
+        if (group.maxLine >= 4 && !group.isIntersection) {
+          const sample = group.cells[0];
+          spawnBeamFx(group.dominantDir, group.dominantDir === 'h' ? sample.r : sample.c, group.type);
+        }
+      }
+
       if (matchedBacon) {
-        showComboBanner('Extra Crispy!!');
-      } else if (comboCount === 2) {
-        showComboBanner('Tasty!');
-      } else if (comboCount === 3) {
-        showComboBanner('Crispy Combo!');
-      } else if (comboCount === 4) {
-        showComboBanner('Extra Shot!');
-      } else if (comboCount >= 5) {
-        showComboBanner('BRUNCH BLAST!');
+        showComboBanner('Extra Crispy!!', 'bacon-word');
+        if (comboCount >= 2) {
+          setTimeout(() => showComboBanner(pickRandomWord(primaryGroup.type, comboCount), 'big-combo'), 180);
+        }
+      } else {
+        const word = pickRandomWord(primaryGroup.type, comboCount);
+        const tone = comboCount >= 2 ? 'big-combo' : `${primaryGroup.type}-word`;
+        showComboBanner(word, tone);
       }
 
       await clearCellsWithChain(toClear, specialsToSpawn);
@@ -880,7 +906,8 @@
       blastedSpecial = true;
 
       if (tile.special === 'striped-h') {
-        spawnBeamFx('h', r);
+        spawnBeamFx('h', r, tile.type);
+        if (tile.type === 'bacon') showComboBanner('Extra Crispy!!', 'bacon-word');
         for (let cc = 0; cc < GRID_SIZE; cc++) {
           const nk = `${r},${cc}`;
           if (board[r][cc] && !clearSet.has(nk)) {
@@ -889,7 +916,8 @@
           }
         }
       } else if (tile.special === 'striped-v') {
-        spawnBeamFx('v', c);
+        spawnBeamFx('v', c, tile.type);
+        if (tile.type === 'bacon') showComboBanner('Extra Crispy!!', 'bacon-word');
         for (let rr = 0; rr < GRID_SIZE; rr++) {
           const nk = `${rr},${c}`;
           if (board[rr][c] && !clearSet.has(nk)) {
@@ -969,7 +997,7 @@
     }
     updateHUD();
 
-    await sleep(230);
+    await sleep(blastedSpecial ? 460 : 340);
 
     // Actually remove popped tiles & transform/spawn special tiles
     for (const k of clearSet) {
@@ -1031,7 +1059,7 @@
   }
 
   async function dropAndRefill() {
-    let anyMoved = false;
+    let maxFinishMs = 0;
 
     for (let c = 0; c < GRID_SIZE; c++) {
       // Collect active row indices in this column from bottom to top
@@ -1048,28 +1076,53 @@
         }
       }
 
+      const colDelay = c * 14;
       let idx = 0;
+      let movedOrder = 0;
+      let spawnSlot = 0;
+
       for (const targetR of activeRows) {
         if (idx < existing.length) {
           const item = existing[idx++];
           board[targetR][c] = item.tile;
           if (item.fromR !== targetR) {
-            anyMoved = true;
-            moveTileDOM(item.tile, targetR, c, true);
+            const dropRows = targetR - item.fromR;
+            const delayMs = colDelay + movedOrder * 34;
+            movedOrder++;
+            const durationMs = Math.round(360 + dropRows * 78);
+            maxFinishMs = Math.max(maxFinishMs, durationMs + delayMs);
+            moveTileDOM(item.tile, targetR, c, true, dropRows, delayMs);
           }
         } else {
-          // Spawn new piece from above
-          anyMoved = true;
+          // Spawn new piece gently from above the board
+          spawnSlot++;
           const fresh = createTileObj(randomType(), null);
           board[targetR][c] = fresh;
-          const dropDist = Math.max(2, activeRows.length - existing.length + 1);
-          createTileElement(fresh, targetR, c, dropDist);
+          const dropDist = targetR + spawnSlot + 0.6;
+          const delayMs = colDelay + movedOrder * 36;
+          movedOrder++;
+          const durationMs = Math.round(370 + dropDist * 78);
+          maxFinishMs = Math.max(maxFinishMs, durationMs + delayMs);
+          createTileElement(fresh, targetR, c, dropDist, delayMs);
         }
       }
     }
 
-    if (anyMoved) {
-      await sleep(290);
+    if (maxFinishMs > 0) {
+      await sleep(maxFinishMs + 110);
+      // Clear per-drop inline transition timings so subsequent swaps stay snappy
+      for (let r = 0; r < GRID_SIZE; r++) {
+        for (let c = 0; c < GRID_SIZE; c++) {
+          const t = board[r][c];
+          if (!t) continue;
+          const el = tileElements.get(t.id);
+          if (el) {
+            el.classList.remove('dropping');
+            el.style.transitionDuration = '';
+            el.style.transitionDelay = '';
+          }
+        }
+      }
     }
   }
 
@@ -1322,23 +1375,62 @@
     });
   }
 
-  // ---- VISUAL FX ----
-  function spawnBeamFx(orientation, index) {
-    const el = document.createElement('div');
-    el.className = 'fx-beam';
-    if (orientation === 'h') {
-      el.style.left = '0px';
-      el.style.top = `${index * cellPx + cellPx * 0.25}px`;
-      el.style.width = `${GRID_SIZE * cellPx}px`;
-      el.style.height = `${cellPx * 0.5}px`;
-    } else {
-      el.style.top = '0px';
-      el.style.left = `${index * cellPx + cellPx * 0.25}px`;
-      el.style.height = `${GRID_SIZE * cellPx}px`;
-      el.style.width = `${cellPx * 0.5}px`;
+  // ---- RANDOM CALLOUT WORDS & VISUAL FX ----
+  const WORD_POOLS = {
+    coffee: ['Caffeinated!', 'Espresso Shot!', 'Double Shot!', 'Perked Up!', 'Full Roast!', 'Fresh Brew!', 'Buzzing!'],
+    bacon: ['Extra Crispy!!'],
+    egg: ['Egg-cellent!', 'Sunny Side!', 'Over Easy!', 'Yolk Yeah!', 'Crackin\'!', 'Golden Yolk!'],
+    avocado: ['Holy Guac!', 'Smashed It!', 'Avo-mazing!', 'Fresh Guac!', 'So Ripe!', 'Guac On!'],
+    chicken: ['Winner Winner!', 'Golden Crisp!', 'Cluck Yeah!', 'Hot & Crispy!', 'Drumroll!', 'Finger Lickin\'!'],
+    general: [
+      'Yummy!', 'Tasty!', 'Delish!', 'Sizzling!', 'Piping Hot!', 'Chef\'s Kiss!',
+      'Brunch Time!', 'Sweet!', 'Crunchy!', 'Toasty!', 'Zesty!', 'Order Up!',
+      'So Good!', 'Mouthwatering!', 'Boom!', 'Nice!'
+    ],
+    combos: [
+      'DIVINE!', 'DELICIOUS!', 'TASTY!', 'UNSTOPPABLE!', 'BRUNCH BLAST!',
+      'BOTTOMLESS!', 'MEGA CRUNCH!', 'HOT PLATE!', 'SUNDAY FUNDAY!', 'FLAVOR EXPLOSION!'
+    ],
+  };
+
+  let lastWord = '';
+  function pickRandomWord(pieceType, combo) {
+    if (pieceType === 'bacon' && combo <= 1) return 'Extra Crispy!!';
+    const pool =
+      combo >= 2
+        ? WORD_POOLS.combos
+        : Math.random() < 0.55 && WORD_POOLS[pieceType]
+          ? WORD_POOLS[pieceType]
+          : WORD_POOLS.general;
+    let pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick === lastWord && pool.length > 1) {
+      pick = pool[(pool.indexOf(pick) + 1) % pool.length];
     }
-    dom.boardFx.appendChild(el);
-    setTimeout(() => el.remove(), 360);
+    lastWord = pick;
+    return pick;
+  }
+
+  // Full-screen themed line-clear blast (bacon strip, coffee jet, runny egg, mushed avocado, crispy chicken)
+  function spawnBeamFx(orientation, index, pieceType = 'coffee') {
+    const rect = dom.boardTiles.getBoundingClientRect();
+    const el = document.createElement('div');
+    const thickness = Math.max(58, Math.round(cellPx * 1.65));
+    el.className = `fx-line-blast ${orientation === 'h' ? 'horiz' : 'vert'} fx-type-${pieceType}`;
+    el.dataset.piece = pieceType;
+
+    const svgHtml = window.BRUNCH_ICONS.getLineBlastSvg(pieceType);
+    if (orientation === 'h') {
+      el.style.top = `${rect.top + (index + 0.5) * cellPx}px`;
+      el.style.height = `${thickness}px`;
+      el.innerHTML = svgHtml;
+    } else {
+      el.style.left = `${rect.left + (index + 0.5) * cellPx}px`;
+      el.style.width = `${thickness}px`;
+      el.innerHTML = `<div class="vert-rot" style="height:${thickness}px">${svgHtml}</div>`;
+    }
+
+    dom.screenFx.appendChild(el);
+    setTimeout(() => el.remove(), 760);
   }
 
   function spawnBurstFx(r, c, diameterPx) {
@@ -1349,7 +1441,7 @@
     el.style.width = `${diameterPx}px`;
     el.style.height = `${diameterPx}px`;
     dom.boardFx.appendChild(el);
-    setTimeout(() => el.remove(), 400);
+    setTimeout(() => el.remove(), 460);
   }
 
   function spawnScoreFx(r, c, text) {
@@ -1359,19 +1451,33 @@
     el.style.left = `${(c + 0.5) * cellPx}px`;
     el.style.top = `${(r + 0.5) * cellPx}px`;
     dom.boardFx.appendChild(el);
-    setTimeout(() => el.remove(), 750);
+    setTimeout(() => el.remove(), 880);
   }
 
-  let comboBannerTimer = null;
-  function showComboBanner(text) {
-    dom.comboBanner.classList.add('hidden');
+  let wordLaneIndex = 0;
+  function showComboBanner(text, toneClass = '') {
+    // Keep accessible live banner text updated (hidden visually so floating words shine)
     dom.comboBanner.textContent = text;
-    void dom.comboBanner.offsetWidth;
-    dom.comboBanner.classList.remove('hidden');
-    clearTimeout(comboBannerTimer);
-    comboBannerTimer = setTimeout(() => {
-      dom.comboBanner.classList.add('hidden');
-    }, 950);
+
+    const rect = dom.boardTiles.getBoundingClientRect();
+    const pop = document.createElement('div');
+    pop.className = `fx-word-pop${toneClass ? ` ${toneClass}` : ''}`;
+    pop.textContent = text;
+
+    // Cycle through separated vertical lanes so cascade words never overlap each other
+    const lanes = [0.22, 0.5, 0.76];
+    const laneY = lanes[wordLaneIndex % lanes.length];
+    wordLaneIndex++;
+
+    const rx = rect.left + rect.width * (0.3 + Math.random() * 0.4);
+    const ry = rect.top + rect.height * laneY;
+    const tilt = Math.round((Math.random() - 0.5) * 14);
+    pop.style.left = `${rx}px`;
+    pop.style.top = `${ry}px`;
+    pop.style.setProperty('--word-tilt', `${tilt}deg`);
+
+    dom.screenFx.appendChild(pop);
+    setTimeout(() => pop.remove(), 1180);
   }
 
   // ---- LEVEL MAP MODAL ----
